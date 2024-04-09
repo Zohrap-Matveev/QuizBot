@@ -21,7 +21,7 @@ private void initializeQuestions() {
     List<String> answers2 = Arrays.asList("Матийс де Лигт", "Криштиану Роналду", "Лионель Месси", "Вирджил ван Дейк");
     List<String> answers3 = Arrays.asList("Бразилия", "Англия", "Испания", "Аргентина");
     List<String> answers4 = Arrays.asList("Уругвай", "Франция", "Испания", "Англия");
-    List<String> answers5 = Arrays.asList("Штрафной", "Мертвый мяч", "Автогол", "Ложнуй манёвр");
+    List<String> answers5 = Arrays.asList("Штрафной", "Мертвый мяч", "Автогол", "Ложный манёвр");
     List<String> answers6 = Arrays.asList("30", "24", "11", "22");
     List<String> answers7 = Arrays.asList("Бразилия", "Англия", "Испания", "Германия");
     List<String> answers8 = Arrays.asList("7,22 на 2,45 метра", "6,9 на 2,11 метра", "7,11 на 2,33 метра", "7,32 на 2,44 метра");
