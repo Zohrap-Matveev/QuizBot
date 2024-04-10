@@ -68,6 +68,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                         log.error("Failed to send message", e);
                     }
                 }
+            } else if (messageText.equals("/repeat")) {
+                isFirstQuizCompleted = false; // Сбрасываем флаг, чтобы пользователь мог пройти первую викторину снова
+                resetQuiz(); // Сбрасываем счет и индекс текущего вопроса
+                sendNextQuestion(chatId);
             } else {
                 userService.registerUser(chatId, messageText);
                 sendNextQuestion(chatId);
@@ -201,25 +205,24 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setText(response);
         execute(message);
 
-        if (currentQuestionIndex + 1 < questions.size()) {
-            currentQuestionIndex++;
+        currentQuestionIndex++; // Переходим к следующему вопросу независимо от правильности ответа
+
+        if (currentQuestionIndex < questions.size()) {
             sendNextQuestion(chatId);
         } else {
             if (!isFirstQuizCompleted) {
                 isFirstQuizCompleted = true;
-                continueButtonShown = true; // Устанавливаем флаг continueButtonShown в true, так как первая викторина завершена
                 currentQuestionIndex = 0;
-                if (maxFirstQuizScore == quiz.getQuestions().size() && maxFirstQuizScore >= 10) { // Проверяем, набрано ли максимальное количество баллов и не менее 10
+                if (maxFirstQuizScore >= 10) { // Проверяем, набрано ли минимальное количество баллов для перехода ко второй викторине
                     SendMessage continueMessage = new SendMessage();
                     continueMessage.setChatId(String.valueOf(chatId));
                     continueMessage.setText("Для доступа ко второй викторине, введите /continue.");
                     execute(continueMessage);
                 } else {
-                    SendMessage endMessage = new SendMessage();
-                    endMessage.setChatId(String.valueOf(chatId));
-                    endMessage.setText("Поздравляем! Вы завершили первую викторину. Но для доступа ко второй викторине, наберите максимальное количество баллов (не менее 10): " + quiz.getQuestions().size());
-                    execute(endMessage);
-                    resetQuiz();
+                    SendMessage repeatMessage = new SendMessage();
+                    repeatMessage.setChatId(String.valueOf(chatId));
+                    repeatMessage.setText("Поздравляем! Вы завершили первую викторину. Но для доступа ко второй викторине, наберите минимальное количество баллов (не менее 10): " + quiz.getQuestions().size() + ". Чтобы начать заново, отправьте команду /repeat.");
+                    execute(repeatMessage);
                 }
             } else {
                 SendMessage endMessage = new SendMessage();
@@ -230,6 +233,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
+
     private void resetQuiz() {
         score = 0;
         currentQuestionIndex = 0;
