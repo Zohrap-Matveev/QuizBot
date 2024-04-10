@@ -35,6 +35,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private boolean isFirstQuizCompleted = false;
     private int maxFirstQuizScore;
     private boolean continueButtonShown = false;
+    private boolean allSecondQuizAnswersCorrect = false;
 
     @Override
     public String getBotUsername() {
@@ -69,9 +70,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                 }
             } else if (messageText.equals("/repeat")) {
-                isFirstQuizCompleted = false; // Сбрасываем флаг, чтобы пользователь мог пройти первую викторину снова
-                resetQuiz(); // Сбрасываем счет и индекс текущего вопроса
-                sendNextQuestion(chatId);
+                startFirstQuiz(chatId); // Начать первую викторину заново
+            } else if (messageText.equals("/again")) {
+                startSecondQuiz(chatId); // Начать вторую викторину заново
             } else {
                 userService.registerUser(chatId, messageText);
                 sendNextQuestion(chatId);
@@ -178,6 +179,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendNextQuestion(chatId);
     }
 
+    private void startFirstQuiz(long chatId) {
+        isFirstQuizCompleted = false; // Сброс флага завершения первой викторины
+        maxFirstQuizScore = 0; // Сброс максимального количества баллов
+        currentQuestionIndex = 0; // Сброс индекса текущего вопроса
+        continueButtonShown = false; // Сброс отображения кнопки "Продолжить"
+
+        try {
+            sendNextQuestion(chatId); // Начать отправку вопросов первой викторины заново
+        } catch (TelegramApiException e) {
+            log.error("Failed to start first quiz", e);
+        }
+    }
+
     private int score = 0;
 
     private void checkAnswer(long chatId, String userAnswer) throws TelegramApiException {
@@ -225,11 +239,18 @@ public class TelegramBot extends TelegramLongPollingBot {
                     execute(repeatMessage);
                 }
             } else {
-                SendMessage endMessage = new SendMessage();
-                endMessage.setChatId(String.valueOf(chatId));
-                endMessage.setText("Вопросы закончились. Спасибо за участие! Вы набрали : " + score + " балла(ов). Чтобы начать заново, отправьте команду /start");
-                execute(endMessage);
-                resetQuiz();
+                if (score < 10) {
+                    SendMessage repeatMessage = new SendMessage();
+                    repeatMessage.setChatId(String.valueOf(chatId));
+                    repeatMessage.setText("Вы набрали менее 10 баллов во второй викторине. Для повторного прохождения введите /again.");
+                    execute(repeatMessage);
+                } else {
+                    SendMessage endMessage = new SendMessage();
+                    endMessage.setChatId(String.valueOf(chatId));
+                    endMessage.setText("Вопросы закончились. Спасибо за участие! Вы набрали : " + score + " балла(ов). Чтобы начать заново, отправьте команду /start");
+                    execute(endMessage);
+                    resetQuiz();
+                }
             }
         }
     }
