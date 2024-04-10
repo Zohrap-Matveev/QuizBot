@@ -51,52 +51,77 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
-            long chatId = update.getMessage().getChatId();
-            String messageText = update.getMessage().getText();
-
-            if (messageText.equals("/start")) {
-                sendRegistrationMessage(chatId);
-            } else if (messageText.equals("/continue")) {
-                if (isFirstQuizCompleted) {
-                    startSecondQuiz(chatId);
-                } else {
-                    SendMessage message = new SendMessage();
-                    message.setChatId(String.valueOf(chatId));
-                    message.setText("Вы не можете продолжить викторину, пока не завершите первую. Продолжить первую викторину, отправьте ответ на текущий вопрос или дождитесь завершения.");
-                    try {
-                        execute(message);
-                    } catch (TelegramApiException e) {
-                        log.error("Failed to send message", e);
-                    }
-                }
-            } else if (messageText.equals("/repeat")) {
-                startFirstQuiz(chatId); // Начать первую викторину заново
-            } else if (messageText.equals("/again")) {
-                startSecondQuiz(chatId); // Начать вторую викторину заново
-            } else {
-                userService.registerUser(chatId, messageText);
-                sendNextQuestion(chatId);
-            }
+            handleMessageUpdate(update);
         } else if (update.hasCallbackQuery()) {
-            String userAnswer = update.getCallbackQuery().getData();
-            long chatId = update.getCallbackQuery().getMessage().getChatId();
-            if (userAnswer.equals("continue")) {
-                if (continueButtonShown) {
-                    startSecondQuiz(chatId);
-                } else {
-                    SendMessage message = new SendMessage();
-                    message.setChatId(String.valueOf(chatId));
-                    message.setText("Вы не можете продолжить викторину, пока не завершите первую. Продолжить первую викторину, отправьте ответ на текущий вопрос или дождитесь завершения.");
-                    try {
-                        execute(message);
-                    } catch (TelegramApiException e) {
-                        log.error("Failed to send message", e);
-                    }
-                }
-            } else {
-                checkAnswer(chatId, userAnswer);
+            handleCallbackQueryUpdate(update);
+        }
+    }
+
+    private void handleMessageUpdate(Update update) throws TelegramApiException{
+        long chatId = update.getMessage().getChatId();
+        String messageText = update.getMessage().getText();
+
+        switch (messageText) {
+            case "/start":
+                handleStartCommand(chatId);
+                break;
+            case "/continue":
+                handleContinueCommand(chatId);
+                break;
+            case "/repeat":
+                handleRepeatCommand(chatId);
+                break;
+            case "/again":
+                handleAgainCommand(chatId);
+                break;
+            default:
+                handleUserAnswer(chatId, messageText);
+                break;
+        }
+    }
+
+    private void handleCallbackQueryUpdate(Update update) throws TelegramApiException{
+        String userAnswer = update.getCallbackQuery().getData();
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+
+        if (userAnswer.equals("continue")) {
+            handleContinueCommand(chatId);
+        } else {
+            checkAnswer(chatId, userAnswer);
+        }
+    }
+
+    private void handleStartCommand(long chatId) {
+        resetQuiz();
+        sendRegistrationMessage(chatId);
+    }
+
+    private void handleContinueCommand(long chatId) throws TelegramApiException{
+        if (isFirstQuizCompleted) {
+            startSecondQuiz(chatId);
+        } else {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText("Вы не можете продолжить викторину, пока не завершите первую. Продолжить первую викторину, отправьте ответ на текущий вопрос или дождитесь завершения.");
+            try {
+                execute(message);
+            } catch (TelegramApiException e) {
+                log.error("Failed to send message", e);
             }
         }
+    }
+
+    private void handleRepeatCommand(long chatId) {
+        startFirstQuiz(chatId);
+    }
+
+    private void handleAgainCommand(long chatId) throws TelegramApiException{
+        startSecondQuiz(chatId);
+    }
+
+    private void handleUserAnswer(long chatId, String userAnswer) throws TelegramApiException{
+        userService.registerUser(chatId, userAnswer);
+        sendNextQuestion(chatId);
     }
 
     private void sendRegistrationMessage(long chatId) {
@@ -180,13 +205,13 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void startFirstQuiz(long chatId) {
-        isFirstQuizCompleted = false; // Сброс флага завершения первой викторины
-        maxFirstQuizScore = 0; // Сброс максимального количества баллов
-        currentQuestionIndex = 0; // Сброс индекса текущего вопроса
-        continueButtonShown = false; // Сброс отображения кнопки "Продолжить"
+        isFirstQuizCompleted = false;
+        maxFirstQuizScore = 0;
+        currentQuestionIndex = 0;
+        continueButtonShown = false;
 
         try {
-            sendNextQuestion(chatId); // Начать отправку вопросов первой викторины заново
+            sendNextQuestion(chatId);
         } catch (TelegramApiException e) {
             log.error("Failed to start first quiz", e);
         }
@@ -209,7 +234,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             response = "Верно!";
             score++;
             if (!isFirstQuizCompleted) {
-                maxFirstQuizScore++; // Увеличиваем количество правильных ответов на вопросы первой викторины
+                maxFirstQuizScore++;
             }
         } else {
             response = "Неверно. Правильный ответ: " + correctAnswer;
@@ -219,7 +244,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setText(response);
         execute(message);
 
-        currentQuestionIndex++; // Переходим к следующему вопросу независимо от правильности ответа
+        currentQuestionIndex++;
 
         if (currentQuestionIndex < questions.size()) {
             sendNextQuestion(chatId);
@@ -227,7 +252,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (!isFirstQuizCompleted) {
                 isFirstQuizCompleted = true;
                 currentQuestionIndex = 0;
-                if (maxFirstQuizScore >= 10) { // Проверяем, набрано ли минимальное количество баллов для перехода ко второй викторине
+                if (maxFirstQuizScore >= 10) {
                     SendMessage continueMessage = new SendMessage();
                     continueMessage.setChatId(String.valueOf(chatId));
                     continueMessage.setText("Для доступа ко второй викторине, введите /continue.");
@@ -258,6 +283,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void resetQuiz() {
         score = 0;
         currentQuestionIndex = 0;
-        continueButtonShown = false; // Сбрасываем флаг continueButtonShown при перезапуске викторины
+        continueButtonShown = false;
     }
 }
