@@ -24,7 +24,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TelegramBot extends TelegramLongPollingBot{
+public class TelegramBot extends TelegramLongPollingBot {
 
     private final BotConfig config;
     private final Quiz quiz;
@@ -37,12 +37,12 @@ public class TelegramBot extends TelegramLongPollingBot{
     private boolean continueButtonShown = false;
 
     @Override
-    public String getBotUsername(){
+    public String getBotUsername() {
         return config.getName();
     }
 
     @Override
-    public String getBotToken(){
+    public String getBotToken() {
         return config.getToken();
     }
 
@@ -75,23 +75,37 @@ public class TelegramBot extends TelegramLongPollingBot{
         } else if (update.hasCallbackQuery()) {
             String userAnswer = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
-            checkAnswer(chatId, userAnswer);
+            if (userAnswer.equals("continue")) {
+                if (continueButtonShown) {
+                    startSecondQuiz(chatId);
+                } else {
+                    SendMessage message = new SendMessage();
+                    message.setChatId(String.valueOf(chatId));
+                    message.setText("Вы не можете продолжить викторину, пока не завершите первую. Продолжить первую викторину, отправьте ответ на текущий вопрос или дождитесь завершения.");
+                    try {
+                        execute(message);
+                    } catch (TelegramApiException e) {
+                        log.error("Failed to send message", e);
+                    }
+                }
+            } else {
+                checkAnswer(chatId, userAnswer);
+            }
         }
     }
 
-
-    private void sendRegistrationMessage(long chatId){
+    private void sendRegistrationMessage(long chatId) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText("Для прохождения викторины, пожалуйста, зарегистрируйтесь. Введите ваше имя:");
-        try{
+        try {
             execute(message);
-        }catch(TelegramApiException e){
+        } catch (TelegramApiException e) {
             log.error("Failed to send registration message", e);
         }
     }
 
-    private void sendGreeting(long chatId) throws TelegramApiException{
+    private void sendGreeting(long chatId) throws TelegramApiException {
         InputStream inputStream = getClass().getResourceAsStream("/static/1200x630wa.png");
         InputFile inputFile = new InputFile(inputStream, "1200x630wa.png");
 
@@ -107,7 +121,7 @@ public class TelegramBot extends TelegramLongPollingBot{
         execute(message);
     }
 
-        private void sendNextQuestion(long chatId) throws TelegramApiException {
+    private void sendNextQuestion(long chatId) throws TelegramApiException {
         if (!greetingSent) {
             sendGreeting(chatId);
             greetingSent = true;
@@ -155,32 +169,31 @@ public class TelegramBot extends TelegramLongPollingBot{
     }
 
 
-    private void startSecondQuiz(long chatId) throws TelegramApiException{
+    private void startSecondQuiz(long chatId) throws TelegramApiException {
         resetQuiz();
         sendNextQuestion(chatId);
     }
 
     private int score = 0;
 
-
-        private void checkAnswer(long chatId, String userAnswer) throws TelegramApiException{
+    private void checkAnswer(long chatId, String userAnswer) throws TelegramApiException {
         List<Question> questions;
-        if(! isFirstQuizCompleted){
+        if (!isFirstQuizCompleted) {
             questions = quiz.getQuestions();
-        }else{
+        } else {
             questions = quiz2.getQuestions();
         }
 
         Question currentQuestion = questions.get(currentQuestionIndex);
         String correctAnswer = currentQuestion.getCorrectAnswer();
         String response;
-        if(userAnswer.equalsIgnoreCase(correctAnswer)){
+        if (userAnswer.equalsIgnoreCase(correctAnswer)) {
             response = "Верно!";
             score++;
-            if(! isFirstQuizCompleted){
+            if (!isFirstQuizCompleted) {
                 maxFirstQuizScore++; // Увеличиваем количество правильных ответов на вопросы первой викторины
             }
-        }else{
+        } else {
             response = "Неверно. Правильный ответ: " + correctAnswer;
         }
         SendMessage message = new SendMessage();
@@ -188,23 +201,27 @@ public class TelegramBot extends TelegramLongPollingBot{
         message.setText(response);
         execute(message);
 
-        if(currentQuestionIndex + 1 < questions.size()){
+        if (currentQuestionIndex + 1 < questions.size()) {
             currentQuestionIndex++;
             sendNextQuestion(chatId);
-        }else{
-            if(! isFirstQuizCompleted){
+        } else {
+            if (!isFirstQuizCompleted) {
                 isFirstQuizCompleted = true;
+                continueButtonShown = true; // Устанавливаем флаг continueButtonShown в true, так как первая викторина завершена
                 currentQuestionIndex = 0;
-                if(maxFirstQuizScore == quiz.getQuestions().size() && maxFirstQuizScore >= 10){ // Проверяем, набрано ли максимальное количество баллов и не менее 10
-                    startSecondQuiz(chatId);
-                }else{
+                if (maxFirstQuizScore == quiz.getQuestions().size() && maxFirstQuizScore >= 10) { // Проверяем, набрано ли максимальное количество баллов и не менее 10
+                    SendMessage continueMessage = new SendMessage();
+                    continueMessage.setChatId(String.valueOf(chatId));
+                    continueMessage.setText("Для доступа ко второй викторине, введите /continue.");
+                    execute(continueMessage);
+                } else {
                     SendMessage endMessage = new SendMessage();
                     endMessage.setChatId(String.valueOf(chatId));
                     endMessage.setText("Поздравляем! Вы завершили первую викторину. Но для доступа ко второй викторине, наберите максимальное количество баллов (не менее 10): " + quiz.getQuestions().size());
                     execute(endMessage);
                     resetQuiz();
                 }
-            }else{
+            } else {
                 SendMessage endMessage = new SendMessage();
                 endMessage.setChatId(String.valueOf(chatId));
                 endMessage.setText("Вопросы закончились. Спасибо за участие! Вы набрали : " + score + " балла(ов). Чтобы начать заново, отправьте команду /start");
@@ -213,10 +230,9 @@ public class TelegramBot extends TelegramLongPollingBot{
             }
         }
     }
-
-    private void resetQuiz(){
+    private void resetQuiz() {
         score = 0;
         currentQuestionIndex = 0;
+        continueButtonShown = false; // Сбрасываем флаг continueButtonShown при перезапуске викторины
     }
 }
-
