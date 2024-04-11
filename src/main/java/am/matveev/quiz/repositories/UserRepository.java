@@ -8,4 +8,6 @@ import org.springframework.stereotype.Repository;
 public interface UserRepository extends JpaRepository<UserEntity,Long>{
 
     boolean existsByChatId(Long chatId);
+
+    UserEntity findByChatId(long chatId);
 }

@@ -17,7 +17,11 @@ public class UserService{
         newUser.setUsername(username);
         userRepository.save(newUser);
     }
-    public boolean existsByChatId(Long chatId) {
-        return userRepository.existsByChatId(chatId);
+
+    public boolean isUserRegistered(long chatId){
+        UserEntity user = userRepository.findByChatId(chatId);
+        // Если пользователь существует, вернуть true, иначе false
+        return user != null;
+
     }
 }
